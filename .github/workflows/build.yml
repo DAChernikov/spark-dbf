@@ -1,0 +1,72 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        spark-version: ["3.5.2", "3.5.3", "3.5.4"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download Spark Scala 2.13 distribution
+        run: |
+          curl -fsSL -o spark.tgz "https://archive.apache.org/dist/spark/spark-${{ matrix.spark-version }}/spark-${{ matrix.spark-version }}-bin-hadoop3-scala2.13.tgz"
+          tar -xzf spark.tgz
+
+      - name: Verify with Spark
+        run: mvn clean verify -Dspark.version=${{ matrix.spark-version }}
+
+      - name: Build assembly
+        run: mvn clean package -DskipTests -Dspark.version=${{ matrix.spark-version }}
+
+      - name: Generate PySpark fixture
+        run: |
+          mvn -q -DskipTests test-compile -Dspark.version=${{ matrix.spark-version }}
+          mvn -q -Dexec.classpathScope=test -Dexec.mainClass=com.github.dachernikov.spark.dbf.GenerateDbfFixture -Dexec.args=target/pyspark-fixtures/cp866.dbf org.codehaus.mojo:exec-maven-plugin:3.5.0:java -Dspark.version=${{ matrix.spark-version }}
+
+      - name: PySpark smoke test
+        run: |
+          "./spark-${{ matrix.spark-version }}-bin-hadoop3-scala2.13/bin/spark-submit" \
+            --master "local[2]" \
+            --jars target/spark-dbf_2.13-0.1.0-assembly.jar \
+            src/test/python/pyspark_smoke.py \
+            target/spark-dbf_2.13-0.1.0-assembly.jar \
+            target/pyspark-fixtures/cp866.dbf
+
+      - name: Inspect assembly JAR
+        run: scripts/inspect-jar.sh target/spark-dbf_2.13-0.1.0-assembly.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spark-dbf_2.13-0.1.0-assembly-spark-${{ matrix.spark-version }}
+          path: target/spark-dbf_2.13-0.1.0-assembly.jar
+
+  java-11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+          cache: maven
+      - name: Verify on Java 11
+        run: mvn clean verify

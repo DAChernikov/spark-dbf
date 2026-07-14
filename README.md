@@ -1,101 +1,108 @@
-# Spark SQL DBF Library
+# spark-dbf
 
-A library for querying [DBF](http://www.digitalpreservation.gov/formats/fdd/fdd000325.shtml) data with [Spark SQL](http://spark.apache.org/docs/latest/sql-programming-guide.html).
+Spark DataSource for reading DBF files with Apache Spark 3.5 and Scala 2.13.
 
-*This is work in progress* and is based on the [spark-avro](https://github.com/databricks/spark-avro) project.
-The "Ye Olde" DBF file format encapsulates data and schema just like the modern Avro format. So it was natural and
-quick to mutate the avro project and adapt it to our trusty and ubiquitous dbf format.
+This project is a Spark 3.5 / Scala 2.13 compatible fork of
+[mraad/spark-dbf](https://github.com/mraad/spark-dbf).
 
-## Requirements
-This library requires Spark 1.2+ and depends on my [Shapefile](https://github.com/mraad/Shapefile) github project.
+## Compatibility
 
-## Building
-Typically, [SBT](http://www.scala-sbt.org/) is used to build Scala based projects, but, I'm using [Maven](http://maven.apache.org/) to build this one.
-The pom.xml has plugins to compile scala and java sources.
+| Library | Spark | Scala | Java |
+|---|---|---|---|
+| 0.1.x | 3.5.2-3.5.4 | 2.13 | 8/11/17 |
 
-Make sure to first clone and install the [Shapefile](https://github.com/mraad/Shapefile) project, then
+## Download
 
-```
-$ mvn clean install
-```
+Download the assembly JAR from:
 
-## Linking
-You can link against this library in your program at the following coordinates:
+https://github.com/DAChernikov/spark-dbf/releases
 
-```
-groupId: com.esri
-artifactId: spark-dbf
-version: 0.1
+Expected file name:
+
+```text
+spark-dbf_2.13-0.1.0-assembly.jar
 ```
 
-The spark-dbf jar file can also be added to a Spark using the `--jars` command line option.
-For example, to include it when starting the spark shell:
+## Usage
 
-```
-$ bin/spark-shell --jars spark-dbf-0.1.jar
-```
-
-## Examples
-
-The following are based on the first 1 million records of the [NYC taxi trips](http://chriswhong.com/).
-you can download the sample dbf from [here](https://dl.dropboxusercontent.com/u/2193160/trips1M.dbf)
-
-
-```
-$ wget https://dl.dropboxusercontent.com/u/2193160/trips1M.dbf
+```python
+df = (
+    spark.read
+    .format("dbf")
+    .option("encoding", "cp866")
+    .load("hdfs:///data/input/file.dbf")
+)
 ```
 
-### Scala API
+The full provider package name also works:
 
-```scala
-import org.apache.spark.sql.SQLContext
-val sqlContext = new SQLContext(sc)
-import sqlContext._
-import com.esri.spark.dbf._
-val trips = sqlContext.dbfFile("trips1M.dbf")
-trips.schema.fields.foreach(println)
-trips.registerTempTable("trips")
-sql("select count(*) from trips").collect
-sql("select tripdist from trips order by tripdist desc limit 10").collect
-
+```python
+df = spark.read.format("com.github.dachernikov.spark.dbf").load("hdfs:///data/input/file.dbf")
 ```
 
-### Python and SQL API
-DBF data can be queried in pure SQL or from python by registering the data as a temporary table.
+## spark-submit
 
-
-```sql
-CREATE TEMPORARY TABLE trips
-USING com.esri.spark.dbf
-OPTIONS (path "trips1M.dbf")
+```bash
+spark-submit \
+  --jars /path/spark-dbf_2.13-0.1.0-assembly.jar \
+  read_dbf.py
 ```
 
-### Java API
-DBF files can be read using static functions in DBFUtils.
+## Directory
 
-
-```java
-import com.esri.spark.dbf.DBFUtils;
-
-JavaSchemaRDD trips = DBFUtils.dbfFile(sqlContext, "trips1M.dbf");
+```python
+df = (
+    spark.read
+    .format("dbf")
+    .option("recursiveFileLookup", "true")
+    .option("addSourceFile", "true")
+    .load("hdfs:///data/input/dbf/")
+)
 ```
 
-## Sample spark shell session with simple geometry UDF
+## Options
 
-This sample uses our [Geometry API](https://github.com/Esri/geometry-api-java) to define a UDF that calculates the
-distance in meters between two lat/lon pairs.
+| Option | Default | Description |
+|---|---:|---|
+| `encoding` | `UTF-8` | DBF character encoding |
+| `ignoreDeleted` | `true` | Skip records marked as deleted |
+| `recursiveFileLookup` | `false` | Read DBF files recursively |
+| `addSourceFile` | `false` | Add `_source_file` column |
+| `columnNameCase` | `preserve` | `preserve`, `lower` or `upper` |
+| `trimStrings` | `true` | Trim trailing spaces |
 
-```shell
-$ ./spark-dbf.sh
+`corruptRecordMode` is `FAILFAST` in this release.
+
+## Airflow
+
+```python
+SparkSubmitOperator(
+    task_id="read_dbf",
+    application="/path/read_dbf.py",
+    jars="/path/spark-dbf_2.13-0.1.0-assembly.jar",
+    conn_id="spark_default",
+)
 ```
 
-```scala
-import com.esri.core.geometry.{GeometryEngine, Point}
-import org.apache.spark.sql.SQLContext
-val sqlContext = new SQLContext(sc)
-import sqlContext._
-import com.esri.spark.dbf._
-sqlContext.dbfFile("trips1M.dbf").registerTempTable("trips")
-sqlContext.registerFunction("ST_DISTANCE", (x1: Float, y1: Float, x2: Float, y2: Float) => GeometryEngine.geodesicDistanceOnWGS84(new Point(x1, y1), new Point(x2, y2)))
-sql("select tripdist*1609.34,ST_DISTANCE(plon,plat,dlon,dlat) from trips limit 20").foreach(println)
+## Build
+
+```bash
+mvn clean verify
 ```
+
+## Limitations
+
+- One DBF file is read by one Spark task.
+- Parallelism comes from reading multiple DBF files.
+- Memo fields are not supported in this release.
+- Spark Decimal precision is limited to 38.
+- Files in one directory must have matching schemas.
+- `mergeSchema` and byte-range splitting are not implemented.
+
+## License
+
+Apache License 2.0. This fork keeps attribution to the original
+[mraad/spark-dbf](https://github.com/mraad/spark-dbf) project.
+
+The assembly JAR includes JavaDBF, licensed under LGPL-3.0.
+

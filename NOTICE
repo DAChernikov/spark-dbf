@@ -1,0 +1,13 @@
+spark-dbf
+Copyright 2026 Daniel Chernikov
+
+This product is a fork of mraad/spark-dbf:
+https://github.com/mraad/spark-dbf
+
+The original spark-dbf project was created by Mansour Raad and published
+under the Apache License, Version 2.0.
+
+This product bundles JavaDBF:
+https://github.com/albfernandez/javadbf
+JavaDBF is licensed under the GNU Lesser General Public License, version 3.0.
+

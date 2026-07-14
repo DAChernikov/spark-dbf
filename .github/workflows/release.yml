@@ -1,0 +1,69 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download Spark Scala 2.13 distribution
+        run: |
+          curl -fsSL -o spark.tgz "https://archive.apache.org/dist/spark/spark-3.5.4/spark-3.5.4-bin-hadoop3-scala2.13.tgz"
+          tar -xzf spark.tgz
+
+      - name: Verify
+        run: mvn clean verify
+
+      - name: Build assembly
+        run: mvn clean package -DskipTests
+
+      - name: Generate PySpark fixture
+        run: |
+          mvn -q -DskipTests test-compile
+          mvn -q -Dexec.classpathScope=test -Dexec.mainClass=com.github.dachernikov.spark.dbf.GenerateDbfFixture -Dexec.args=target/pyspark-fixtures/cp866.dbf org.codehaus.mojo:exec-maven-plugin:3.5.0:java
+
+      - name: PySpark smoke test
+        run: |
+          ./spark-3.5.4-bin-hadoop3-scala2.13/bin/spark-submit \
+            --master "local[2]" \
+            --jars target/spark-dbf_2.13-0.1.0-assembly.jar \
+            src/test/python/pyspark_smoke.py \
+            target/spark-dbf_2.13-0.1.0-assembly.jar \
+            target/pyspark-fixtures/cp866.dbf
+
+      - name: Inspect JAR
+        run: scripts/inspect-jar.sh target/spark-dbf_2.13-0.1.0-assembly.jar
+
+      - name: SHA-256
+        run: sha256sum target/spark-dbf_2.13-0.1.0-assembly.jar > target/spark-dbf_2.13-0.1.0-assembly.jar.sha256
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/spark-dbf_2.13-0.1.0-assembly.jar
+            target/spark-dbf_2.13-0.1.0-assembly.jar.sha256
+          body: |
+            spark-dbf 0.1.0
+
+            - Spark 3.5 / Scala 2.13 compatible DBF DataSource.
+            - PySpark API: spark.read.format("dbf").
+            - Assembly JAR excludes Spark, Scala and Hadoop runtime libraries.
