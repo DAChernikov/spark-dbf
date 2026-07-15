@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-scala-2.12:
+  build-scala-2-12:
+    name: build-scala-2.12 (Spark ${{ matrix.spark-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -38,7 +39,8 @@ jobs:
           name: spark-dbf_2.12-0.2.0-assembly
           path: target/spark-dbf_2.12-0.2.0-assembly.jar
 
-  build-scala-2.13:
+  build-scala-2-13:
+    name: build-scala-2.13 (Spark ${{ matrix.spark-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -70,8 +72,9 @@ jobs:
           name: spark-dbf_2.13-0.2.0-assembly
           path: target/spark-dbf_2.13-0.2.0-assembly.jar
 
-  pyspark-scala-2.12:
-    needs: build-scala-2.12
+  pyspark-scala-2-12:
+    name: pyspark-scala-2.12 (Spark ${{ matrix.spark-version }})
+    needs: build-scala-2-12
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -105,8 +108,9 @@ jobs:
       - name: Inspect assembly JAR
         run: scripts/inspect-jar.sh target/spark-dbf_2.12-0.2.0-assembly.jar
 
-  pyspark-scala-2.13:
-    needs: build-scala-2.13
+  pyspark-scala-2-13:
+    name: pyspark-scala-2.13 (Spark ${{ matrix.spark-version }})
+    needs: build-scala-2-13
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
