@@ -11,6 +11,7 @@ class DbfOptionsSuite extends AnyFunSuite {
     assert(options.columnNameCase == "preserve")
     assert(options.trimStrings)
     assert(options.ignoreDeleted)
+    assert(options.memoFileMode == "REQUIRED")
   }
 
   test("validates invalid encoding") {
@@ -26,5 +27,11 @@ class DbfOptionsSuite extends AnyFunSuite {
   test("requires path") {
     assert(intercept[DbfException](DbfOptions(Map.empty)).getMessage.contains("DBF path is missing"))
   }
-}
 
+  test("parses and validates memoFileMode") {
+    assert(DbfOptions(Map("path" -> "x", "memoFileMode" -> "null")).memoFileMode == "NULL")
+    assert(DbfOptions(Map("path" -> "x", "memoFileMode" -> "IGNORE")).memoFileMode == "IGNORE")
+    val error = intercept[DbfException](DbfOptions(Map("path" -> "x", "memoFileMode" -> "bad")))
+    assert(error.getMessage.contains("REQUIRED, NULL and IGNORE"))
+  }
+}
