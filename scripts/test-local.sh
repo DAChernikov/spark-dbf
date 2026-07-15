@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-JAR="${1:-target/spark-dbf_2.13-0.1.0-assembly.jar}"
-FIXTURE="${2:-target/pyspark-fixtures/cp866.dbf}"
+SCALA_BINARY="${1:-2.12}"
+SPARK_SUBMIT="${SPARK_SUBMIT:-spark-submit}"
+JAR="dist/spark-dbf_${SCALA_BINARY}-0.2.0-assembly.jar"
 
-./mvnw -q -DskipTests test-compile
-./mvnw -q -DskipTests package
-./mvnw -q -Dexec.classpathScope=test -Dexec.mainClass=com.github.dachernikov.spark.dbf.GenerateDbfFixture -Dexec.args="$FIXTURE" org.codehaus.mojo:exec-maven-plugin:3.5.0:java
+python examples/generate_dbf_examples.py --small-only --overwrite
+scripts/build-all.sh
 
-spark-submit \
+"$SPARK_SUBMIT" \
   --master local[2] \
   --jars "$JAR" \
-  src/test/python/pyspark_smoke.py "$JAR" "$FIXTURE"
+  examples/read_and_validate_dbf.py \
+  --base-path examples/generated \
+  --scala-binary-version "$SCALA_BINARY"
 
 scripts/inspect-jar.sh "$JAR"
-

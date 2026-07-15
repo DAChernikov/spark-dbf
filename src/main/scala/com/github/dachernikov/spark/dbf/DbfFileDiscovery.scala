@@ -1,5 +1,7 @@
 package com.github.dachernikov.spark.dbf
 
+import java.net.URI
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.slf4j.LoggerFactory
@@ -8,7 +10,7 @@ import org.slf4j.LoggerFactory
 object DbfFileDiscovery {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  final case class DbfFile(uri: String) extends Serializable
+  final case class DbfFile(uri: String, pathUri: URI) extends Serializable
 
   def discover(options: DbfOptions, conf: Configuration): Seq[DbfFile] = {
     val input = new Path(options.path)
@@ -29,7 +31,7 @@ object DbfFileDiscovery {
     if (sorted.isEmpty) {
       throw new DbfException(s"No DBF files found under path: ${input.toString}")
     }
-    logger.info("Discovered {} DBF file(s) under {}", Int.box(sorted.size), input.toString)
+    logger.info(s"Discovered ${sorted.size} DBF file(s) under ${input.toString}")
     sorted
   }
 
@@ -42,8 +44,10 @@ object DbfFileDiscovery {
       else Seq.empty
     }
 
-  private def qualified(fs: FileSystem, path: Path): DbfFile =
-    DbfFile(fs.makeQualified(path).toUri.toString)
+  private def qualified(fs: FileSystem, path: Path): DbfFile = {
+    val uri = fs.makeQualified(path).toUri
+    DbfFile(uri.toString, uri)
+  }
 
   private def isDbf(path: Path): Boolean =
     path.getName.toLowerCase(java.util.Locale.ROOT).endsWith(".dbf")
@@ -53,4 +57,3 @@ object DbfFileDiscovery {
     name.startsWith(".") || name.startsWith("_")
   }
 }
-

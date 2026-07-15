@@ -11,6 +11,8 @@ final class DbfRelation(
     override val sqlContext: SQLContext,
     files: Seq[DbfFileDiscovery.DbfFile],
     fields: Seq[DbfSchema.FieldMeta],
+    sourceFields: Seq[DbfSchema.FieldMeta],
+    memoFields: Seq[DbfSchema.FieldMeta],
     outputSchema: StructType,
     options: DbfOptions,
     hadoopConfiguration: Map[String, String])
@@ -20,5 +22,13 @@ final class DbfRelation(
   override def schema: StructType = outputSchema
 
   override def buildScan(): RDD[Row] =
-    new DbfRDD(sqlContext.sparkContext, files, fields, outputSchema, options, hadoopConfiguration)
+    new DbfRDD(
+      sqlContext.sparkContext,
+      files,
+      fields,
+      sourceFields,
+      memoFields,
+      outputSchema,
+      options,
+      hadoopConfiguration)
 }

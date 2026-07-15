@@ -18,7 +18,12 @@ object DbfSchema {
       sparkType: DataType)
       extends Serializable
 
-  final case class Inferred(schema: StructType, fields: Seq[FieldMeta]) extends Serializable
+  final case class Inferred(
+      schema: StructType,
+      fields: Seq[FieldMeta],
+      sourceFields: Seq[FieldMeta],
+      memoFields: Seq[FieldMeta])
+      extends Serializable
 
   def infer(files: Seq[DbfFileDiscovery.DbfFile], options: DbfOptions, conf: Configuration): Inferred = {
     val schemas = files.map(file => file -> readFileSchema(file, options, conf))
@@ -28,22 +33,26 @@ object DbfSchema {
   }
 
   def readFileSchema(file: DbfFileDiscovery.DbfFile, options: DbfOptions, conf: Configuration): Inferred = {
-    val path = new Path(file.uri)
+    val path = new Path(file.pathUri)
     val fs = path.getFileSystem(conf)
     val input = fs.open(path)
     var reader: DBFReader = null
     try {
       reader = new DBFReader(input, options.charset)
       reader.setTrimRightSpaces(options.trimStrings)
-      val fields = (0 until reader.getFieldCount).map { index =>
+      val sourceFields = (0 until reader.getFieldCount).map { index =>
         val field = reader.getField(index)
         toFieldMeta(file.uri, field, options)
       }
+      val memoFields = sourceFields.filter(field => DbfMemo.isMemoBacked(field.dbfType))
+      val fields =
+        if (options.memoFileMode == "IGNORE") sourceFields.filterNot(field => DbfMemo.isMemoBacked(field.dbfType))
+        else sourceFields
       val duplicates = fields.groupBy(_.sparkName).collect { case (name, values) if values.size > 1 => name }.toSeq.sorted
       if (duplicates.nonEmpty) {
         throw new DbfException(s"Duplicate DBF column names after columnNameCase in ${file.uri}: ${duplicates.mkString(", ")}")
       }
-      Inferred(StructType(fields.map(f => StructField(f.sparkName, f.sparkType, nullable = true))), fields)
+      Inferred(StructType(fields.map(f => StructField(f.sparkName, f.sparkType, nullable = true))), fields, sourceFields, memoFields)
     } catch {
       case e: DbfException => throw e
       case e: IOException => throw new DbfException(s"I/O error while reading DBF header: ${file.uri}", e)
@@ -54,6 +63,14 @@ object DbfSchema {
   }
 
   def applyExplicitSchema(inferred: Inferred, userSchema: StructType, options: DbfOptions): Inferred = {
+    if (options.memoFileMode == "IGNORE") {
+      val memoNames = inferred.memoFields.map(_.sparkName).toSet
+      val requested = userSchema.fieldNames.filter(name => memoNames.contains(options.normalizeColumnName(name)))
+      if (requested.nonEmpty) {
+        throw new DbfException(
+          s"memoFileMode=IGNORE cannot be used with explicit MEMO fields: ${requested.mkString(", ")}.")
+      }
+    }
     val fieldsByName = inferred.fields.map(f => f.sparkName -> f).toMap
     val duplicates = userSchema.fieldNames.groupBy(identity).collect { case (name, values) if values.length > 1 => name }
     if (duplicates.nonEmpty) {
@@ -71,7 +88,11 @@ object DbfSchema {
         Some(meta.copy(sparkName = field.name, sparkType = field.dataType))
       }
     }
-    Inferred(StructType(outputFields.map(f => StructField(f.sparkName, f.sparkType, nullable = true))), outputFields)
+    Inferred(
+      StructType(outputFields.map(f => StructField(f.sparkName, f.sparkType, nullable = true))),
+      outputFields,
+      inferred.sourceFields,
+      inferred.memoFields)
   }
 
   def toFieldMeta(file: String, field: DBFField, options: DbfOptions): FieldMeta = {
@@ -93,11 +114,11 @@ object DbfSchema {
         if (scale == 0 && length > 0 && length <= 18) LongType else decimalType(file, fieldName, length, scale)
       case DBFDataType.FLOATING_POINT | DBFDataType.DOUBLE => DoubleType
       case DBFDataType.CURRENCY => DecimalType(19, 4)
+      // JavaDBF exposes Visual FoxPro's fixed-width B (Double) as BINARY.
+      case DBFDataType.BINARY if length == 8 => DoubleType
       case DBFDataType.BINARY | DBFDataType.VARBINARY | DBFDataType.BLOB | DBFDataType.GENERAL_OLE | DBFDataType.PICTURE =>
         BinaryType
-      case DBFDataType.MEMO =>
-        throw new DbfException(
-          s"Unsupported DBF memo field '$fieldName' in $file. Memo companion files are not supported in this release.")
+      case DBFDataType.MEMO => StringType
       case other =>
         throw new DbfException(s"Unsupported DBF field type '$other' for field '$fieldName' in $file.")
     }
@@ -161,4 +182,3 @@ object DbfSchema {
     }
   }
 }
-

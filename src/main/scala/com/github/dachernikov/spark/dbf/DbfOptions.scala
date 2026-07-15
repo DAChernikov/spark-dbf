@@ -14,7 +14,8 @@ final case class DbfOptions(
     columnNameCase: String,
     trimStrings: Boolean,
     ignoreDeleted: Boolean,
-    corruptRecordMode: String)
+    corruptRecordMode: String,
+    memoFileMode: String)
     extends Serializable {
 
   def charset: Charset = Charset.forName(encoding)
@@ -55,6 +56,11 @@ object DbfOptions {
       throw new DbfException("Invalid corruptRecordMode. This release supports FAILFAST only.")
     }
 
+    val memoFileMode = normalized.getOrElse("memofilemode", "REQUIRED").toUpperCase(Locale.ROOT)
+    if (!Set("REQUIRED", "NULL", "IGNORE").contains(memoFileMode)) {
+      throw new DbfException("Invalid memoFileMode. Supported values are REQUIRED, NULL and IGNORE.")
+    }
+
     DbfOptions(
       path = path,
       encoding = encoding,
@@ -63,7 +69,8 @@ object DbfOptions {
       columnNameCase = columnNameCase,
       trimStrings = parseBoolean(normalized, "trimstrings", default = true),
       ignoreDeleted = parseBoolean(normalized, "ignoredeleted", default = true),
-      corruptRecordMode = corruptRecordMode)
+      corruptRecordMode = corruptRecordMode,
+      memoFileMode = memoFileMode)
   }
 
   def withSourceFile(schema: StructType, add: Boolean): StructType =
@@ -78,4 +85,3 @@ object DbfOptions {
       case Some(value) => throw new DbfException(s"Invalid boolean value '$value' for option '$key'.")
     }
 }
-

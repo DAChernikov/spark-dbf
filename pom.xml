@@ -4,12 +4,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.github.dachernikov</groupId>
-  <artifactId>spark-dbf_2.13</artifactId>
-  <version>0.1.0</version>
+  <artifactId>spark-dbf_${scala.binary.version}</artifactId>
+  <version>0.2.0</version>
   <packaging>jar</packaging>
 
   <name>spark-dbf</name>
-  <description>Spark DataSource for reading DBF files with Apache Spark 3.5 and Scala 2.13.</description>
+  <description>Spark DataSource for reading DBF and DBF memo files with Apache Spark 3.5.</description>
   <url>https://github.com/DAChernikov/spark-dbf</url>
 
   <licenses>
@@ -28,10 +28,9 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <scala.binary.version>2.13</scala.binary.version>
-    <scala.version>2.13.8</scala.version>
     <spark.version>3.5.4</spark.version>
     <javadbf.version>1.14.1</javadbf.version>
+    <hadoop.version>3.3.4</hadoop.version>
     <maven.compiler.release>8</maven.compiler.release>
     <maven.compiler.source>8</maven.compiler.source>
     <maven.compiler.target>8</maven.compiler.target>
@@ -49,11 +48,37 @@
       <artifactId>spark-core_${scala.binary.version}</artifactId>
       <version>${spark.version}</version>
       <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-runtime</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <version>${spark.version}</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-runtime</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client</artifactId>
+      <version>${hadoop.version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -79,11 +104,36 @@
       <version>4.13.2</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-minicluster</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>2.28.2</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
     <sourceDirectory>src/main/scala</sourceDirectory>
     <testSourceDirectory>src/test/scala</testSourceDirectory>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>${project.basedir}</directory>
+        <targetPath>META-INF</targetPath>
+        <includes>
+          <include>LICENSE</include>
+          <include>NOTICE</include>
+        </includes>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>net.alchim31.maven</groupId>
@@ -141,8 +191,8 @@
                 </requireJavaVersion>
                 <requireProperty>
                   <property>scala.binary.version</property>
-                  <regex>2\.13</regex>
-                  <message>This project only builds Scala 2.13 artifacts.</message>
+                  <regex>2\.(12|13)</regex>
+                  <message>Activate scala-2.12 or scala-2.13.</message>
                 </requireProperty>
               </rules>
             </configuration>
@@ -155,7 +205,7 @@
         <version>2.2.0</version>
         <configuration>
           <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
-          <argLine>-Xmx2g --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-exports=java.base/sun.security.action=ALL-UNNAMED --add-exports=java.base/sun.util.calendar=ALL-UNNAMED</argLine>
+          <argLine>-Xmx2g --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-exports=java.base/sun.security.action=ALL-UNNAMED --add-exports=java.base/sun.util.calendar=ALL-UNNAMED</argLine>
         </configuration>
         <executions>
           <execution>
@@ -217,4 +267,24 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>scala-2.12</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <scala.binary.version>2.12</scala.binary.version>
+        <scala.version>2.12.18</scala.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>scala-2.13</id>
+      <properties>
+        <scala.binary.version>2.13</scala.binary.version>
+        <scala.version>2.13.8</scala.version>
+      </properties>
+    </profile>
+  </profiles>
 </project>

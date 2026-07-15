@@ -19,9 +19,9 @@ class DbfSchemaSuite extends AnyFunSuite {
     assert(e.getMessage.contains("precision 40"))
   }
 
-  test("rejects memo fields in first release") {
-    val e = intercept[DbfException](DbfSchema.toSparkType("x.dbf", "M", DBFDataType.MEMO, 10, 0))
-    assert(e.getMessage.contains("Memo companion files are not supported"))
+  test("maps text and binary memo fields") {
+    assert(DbfSchema.toSparkType("x.dbf", "M", DBFDataType.MEMO, 10, 0) == StringType)
+    assert(DbfSchema.toSparkType("x.dbf", "B", DBFDataType.BLOB, 4, 0) == BinaryType)
+    assert(DbfSchema.toSparkType("x.dbf", "D", DBFDataType.BINARY, 8, 0) == DoubleType)
   }
 }
-

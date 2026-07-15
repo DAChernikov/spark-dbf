@@ -9,61 +9,61 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  verify-and-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Download Spark Scala 2.13 distribution
+          cache: pip
+          cache-dependency-path: examples/requirements.txt
+      - name: Install generator and PySpark Scala 2.12 runtime
+        run: python -m pip install -r examples/requirements.txt pyspark==3.5.4
+      - name: Download Spark Scala 2.13 runtime
         run: |
           curl -fsSL -o spark.tgz "https://archive.apache.org/dist/spark/spark-3.5.4/spark-3.5.4-bin-hadoop3-scala2.13.tgz"
           tar -xzf spark.tgz
-
-      - name: Verify
-        run: mvn clean verify
-
-      - name: Build assembly
-        run: mvn clean package -DskipTests
-
-      - name: Generate PySpark fixture
+      - name: Generate small DBF fixtures
+        run: python examples/generate_dbf_examples.py --small-only --overwrite
+      - name: Test and build both Scala artifacts
+        run: scripts/build-all.sh
+      - name: Validate Scala 2.12 assembly through PySpark
         run: |
-          mvn -q -DskipTests test-compile
-          mvn -q -Dexec.classpathScope=test -Dexec.mainClass=com.github.dachernikov.spark.dbf.GenerateDbfFixture -Dexec.args=target/pyspark-fixtures/cp866.dbf org.codehaus.mojo:exec-maven-plugin:3.5.0:java
-
-      - name: PySpark smoke test
+          spark-submit --master local[2] \
+            --jars dist/spark-dbf_2.12-0.2.0-assembly.jar \
+            examples/read_and_validate_dbf.py \
+            --base-path examples/generated \
+            --scala-binary-version 2.12
+      - name: Validate Scala 2.13 assembly through Spark
         run: |
           ./spark-3.5.4-bin-hadoop3-scala2.13/bin/spark-submit \
-            --master "local[2]" \
-            --jars target/spark-dbf_2.13-0.1.0-assembly.jar \
-            src/test/python/pyspark_smoke.py \
-            target/spark-dbf_2.13-0.1.0-assembly.jar \
-            target/pyspark-fixtures/cp866.dbf
-
-      - name: Inspect JAR
-        run: scripts/inspect-jar.sh target/spark-dbf_2.13-0.1.0-assembly.jar
-
-      - name: SHA-256
-        run: sha256sum target/spark-dbf_2.13-0.1.0-assembly.jar > target/spark-dbf_2.13-0.1.0-assembly.jar.sha256
-
+            --master local[2] \
+            --jars dist/spark-dbf_2.13-0.2.0-assembly.jar \
+            examples/read_and_validate_dbf.py \
+            --base-path examples/generated \
+            --scala-binary-version 2.13
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spark-dbf-0.2.0-release
+          path: dist/
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            target/spark-dbf_2.13-0.1.0-assembly.jar
-            target/spark-dbf_2.13-0.1.0-assembly.jar.sha256
+          generate_release_notes: false
           body: |
-            spark-dbf 0.1.0
+            spark-dbf 0.2.0
 
-            - Spark 3.5 / Scala 2.13 compatible DBF DataSource.
-            - PySpark API: spark.read.format("dbf").
-            - Assembly JAR excludes Spark, Scala and Hadoop runtime libraries.
+            - Added DBT and FPT text MEMO support with executor-side Hadoop file discovery.
+            - Added separate assembly JARs for Scala 2.12 and Scala 2.13.
+            - Tested with Spark 3.5.2-3.5.4, local files, HDFS, and real PySpark/Spark runtimes.
+          files: |
+            dist/spark-dbf_2.12-0.2.0-assembly.jar
+            dist/spark-dbf_2.12-0.2.0-assembly.jar.sha256
+            dist/spark-dbf_2.13-0.2.0-assembly.jar
+            dist/spark-dbf_2.13-0.2.0-assembly.jar.sha256
