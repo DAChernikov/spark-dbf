@@ -9,5 +9,6 @@ under the Apache License, Version 2.0.
 
 This product bundles JavaDBF:
 https://github.com/albfernandez/javadbf
-JavaDBF is licensed under the GNU Lesser General Public License, version 3.0.
-
+JavaDBF 1.14.1 is licensed under the GNU Lesser General Public License,
+version 3.0. The corresponding license text is included as
+META-INF/LICENSE-javadbf.txt in source and binary distributions.
