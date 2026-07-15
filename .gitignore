@@ -1,8 +1,14 @@
 target/
+dist/
+examples/generated/*
+!examples/generated/.gitkeep
 work/
 .mvn/wrapper/dists/
 .idea/
 .vscode/
+.venv/
+__pycache__/
+*.py[cod]
 .DS_Store
 *.class
 *.log
